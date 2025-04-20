@@ -34,12 +34,10 @@ const WorkingHours = () => {
   );
 
   const [savingHours, setSavingHours] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   const fetchWorkingHours = async () => {
     try {
       const dealership = await getDealershipInfo();
-      console.log("API response:", dealership);
 
       if (dealership?.workingHours?.length === DAYS.length) {
         const loadedHours = DAYS.map((_, index) => {
@@ -51,7 +49,6 @@ const WorkingHours = () => {
           };
         });
 
-        console.log("Loaded Hours:", loadedHours);
         setWorkingHours(loadedHours);
       } else {
         toast.error("Invalid working hours format from server.");
@@ -59,8 +56,6 @@ const WorkingHours = () => {
     } catch (err) {
       toast.error("Failed to load working hours");
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
   // Load saved hours from the database on mount

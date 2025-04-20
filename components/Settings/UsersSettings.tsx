@@ -44,7 +44,7 @@ const UsersSettings = () => {
   const fetchUsers = async () => {
     setFetchingUsers(true);
     try {
-      const response = await fetch("/api/users");
+      const response = await fetch(`/api/users/`);
       if (!response.ok) {
         throw new Error("Failed to fetch users");
       }
@@ -62,7 +62,7 @@ const UsersSettings = () => {
   const updateUserRole = async (userId: string, role: "USER" | "ADMIN") => {
     setUpdatingRole(true);
     try {
-      const response = await fetch(`/api/users`, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -120,10 +120,8 @@ const UsersSettings = () => {
   // Filter users based on search query
   useEffect(() => {
     if (userSearch) {
-      const result = users.filter(
-        (user) =>
-          user.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-          user.email.toLowerCase().includes(userSearch.toLowerCase())
+      const result = users.filter((user) =>
+        user.email.toLowerCase().includes(userSearch.toLowerCase())
       );
       setFilteredUsers(result);
     } else {
