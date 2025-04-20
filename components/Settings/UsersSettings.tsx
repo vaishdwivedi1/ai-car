@@ -19,85 +19,125 @@ import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
 import { CheckCircle, Loader2, Shield, Users, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
-// UsersSettings Component
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: "USER" | "ADMIN";
+  imageUrl?: string;
+}
+
 const UsersSettings = () => {
-  // State Variables
   const [userSearch, setUserSearch] = useState("");
   const [fetchingUsers, setFetchingUsers] = useState(false);
-  const [usersData, setUsersData] = useState<any>(null);
-  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [updatingRole, setUpdatingRole] = useState(false);
-  const [userToPromote, setUserToPromote] = useState<any>(null);
-  const [userToDemote, setUserToDemote] = useState<any>(null);
+  const [userToPromote, setUserToPromote] = useState<User | null>(null);
+  const [userToDemote, setUserToDemote] = useState<User | null>(null);
   const [confirmAdminDialog, setConfirmAdminDialog] = useState(false);
   const [confirmRemoveDialog, setConfirmRemoveDialog] = useState(false);
 
-  // Example function to handle making admin
-  const handleMakeAdmin = () => {
-    setUpdatingRole(true);
-    // Logic to make user an admin goes here
-    setTimeout(() => {
-      setUpdatingRole(false);
-      setConfirmAdminDialog(false);
-    }, 2000); // Simulate async API call
-  };
-
-  // Example function to handle removing admin
-  const handleRemoveAdmin = () => {
-    setUpdatingRole(true);
-    // Logic to remove user from admin goes here
-    setTimeout(() => {
-      setUpdatingRole(false);
-      setConfirmRemoveDialog(false);
-    }, 2000); // Simulate async API call
-  };
-
-  // Use Effect to fetch users (example logic)
-  useEffect(() => {
+  // Fetch users from API
+  const fetchUsers = async () => {
     setFetchingUsers(true);
-    // Simulate fetching data from API
-    setTimeout(() => {
-      setUsersData({
-        success: true,
-        data: [
-          {
-            id: 1,
-            name: "John Doe",
-            email: "john.doe@example.com",
-            role: "USER",
-            imageUrl: "",
-          },
-          {
-            id: 2,
-            name: "Jane Smith",
-            email: "jane.smith@example.com",
-            role: "ADMIN",
-            imageUrl: "",
-          },
-        ],
-      });
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Failed to load users");
+    } finally {
       setFetchingUsers(false);
-    }, 1000); // Simulate async API call
+    }
+  };
+
+  // Update user role
+  const updateUserRole = async (userId: string, role: "USER" | "ADMIN") => {
+    setUpdatingRole(true);
+    try {
+      const response = await fetch(`/api/users`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update user role");
+      }
+
+      // Update local state
+      setUsers(
+        users.map((user) => (user._id === userId ? { ...user, role } : user))
+      );
+
+      toast.success(`User role updated to ${role}`);
+      return true;
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      toast.error("Failed to update user role");
+      return false;
+    } finally {
+      setUpdatingRole(false);
+    }
+  };
+
+  // Handle making admin
+  const handleMakeAdmin = async () => {
+    if (!userToPromote) return;
+
+    const success = await updateUserRole(userToPromote._id, "ADMIN");
+    if (success) {
+      setConfirmAdminDialog(false);
+      setUserToPromote(null);
+    }
+  };
+
+  // Handle removing admin
+  const handleRemoveAdmin = async () => {
+    if (!userToDemote) return;
+
+    const success = await updateUserRole(userToDemote._id, "USER");
+    if (success) {
+      setConfirmRemoveDialog(false);
+      setUserToDemote(null);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchUsers();
   }, []);
 
   // Filter users based on search query
   useEffect(() => {
-    if (usersData?.data) {
-      const result = usersData.data.filter((user: any) =>
-        user.name.toLowerCase().includes(userSearch.toLowerCase())
+    if (userSearch) {
+      const result = users.filter(
+        (user) =>
+          user.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+          user.email.toLowerCase().includes(userSearch.toLowerCase())
       );
       setFilteredUsers(result);
+    } else {
+      setFilteredUsers(users);
     }
-  }, [userSearch, usersData]);
+  }, [userSearch, users]);
 
   return (
     <TabsContent value="admins" className="mt-4">
       <Card className="bg-gray-800 border border-gray-700">
         <CardHeader>
-          <CardTitle className="text-white">Admin Users</CardTitle>
+          <CardTitle className="text-white">User Management</CardTitle>
           <CardDescription className="text-gray-400">
-            Manage users with admin privileges.
+            Manage user roles and permissions
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -115,14 +155,11 @@ const UsersSettings = () => {
             <div className="py-12 flex justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
             </div>
-          ) : usersData?.success && filteredUsers.length > 0 ? (
+          ) : filteredUsers.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-gray-800 text-gray-400">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      User
-                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                       Email
                     </th>
@@ -136,7 +173,7 @@ const UsersSettings = () => {
                 </thead>
                 <tbody className="bg-gray-900 divide-y divide-gray-700">
                   {filteredUsers.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user._id}>
                       <td className="px-6 py-4 text-sm font-medium text-white">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
@@ -150,12 +187,10 @@ const UsersSettings = () => {
                               <Users className="h-4 w-4 text-gray-400" />
                             )}
                           </div>
-                          <span>{user.name || "Unnamed User"}</span>
+                          <span>{user.email}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-400">
-                        {user.email}
-                      </td>
+
                       <td className="px-6 py-4 text-sm text-gray-400">
                         <span
                           className={
@@ -172,7 +207,7 @@ const UsersSettings = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red-600 border-gray-700 "
+                            className="text-red-600 border-gray-700"
                             onClick={() => {
                               setUserToDemote(user);
                               setConfirmRemoveDialog(true);
@@ -186,7 +221,7 @@ const UsersSettings = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-green-500 border-gray-700 "
+                            className="text-green-500 border-gray-700"
                             onClick={() => {
                               setUserToPromote(user);
                               setConfirmAdminDialog(true);
@@ -227,7 +262,7 @@ const UsersSettings = () => {
             <DialogDescription>
               Are you sure you want to give admin privileges to{" "}
               {userToPromote?.name || userToPromote?.email}? Admin users can
-              manage all aspects of the dealership.
+              manage all aspects of the application.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -247,7 +282,7 @@ const UsersSettings = () => {
               {updatingRole ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Confirming...
+                  Updating...
                 </>
               ) : (
                 <>
@@ -268,7 +303,7 @@ const UsersSettings = () => {
             <DialogDescription>
               Are you sure you want to remove admin privileges from{" "}
               {userToDemote?.name || userToDemote?.email}? They will no longer
-              be able to access the admin dashboard.
+              be able to access admin features.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -289,7 +324,7 @@ const UsersSettings = () => {
               {updatingRole ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Removing...
+                  Updating...
                 </>
               ) : (
                 "Remove Admin"

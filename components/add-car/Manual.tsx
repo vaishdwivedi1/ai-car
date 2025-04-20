@@ -1,8 +1,8 @@
 "use client";
 
 import { Loader2, Upload, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
@@ -47,6 +47,8 @@ const Manual = ({ form }: ManualFormProps) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageError, setImageError] = useState("");
   const [addCarLoading, setAddCarLoading] = useState(false);
+  const params = useParams();
+  const carId = params?.car;
 
   const {
     register,
@@ -130,10 +132,10 @@ const Manual = ({ form }: ManualFormProps) => {
     });
   };
 
+  const formImages = watch("images") || [];
+
   async function onSubmit(data: any) {
     setAddCarLoading(true);
-    // Get existing images from form (could include AI image)
-    const formImages = getValues("images") || [];
 
     // Combine AI image (if exists) with manually uploaded images
     const allImages = [
@@ -161,29 +163,75 @@ const Manual = ({ form }: ManualFormProps) => {
     };
 
     try {
-      const response = await fetch("/api/cars", {
-        method: "POST",
+      const url = carId ? `/api/cars/${carId}` : "/api/cars";
+      const method = carId ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(carData),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || "Failed to create car");
+        throw new Error(
+          errorText || `Failed to ${carId ? "update" : "create"} car`
+        );
       }
 
-      const result = await response.json();
-      toast.success("Car created successfully!");
-      router.push("/inventory");
+      toast.success(`Car ${carId ? "updated" : "created"} successfully!`);
+      router.push("/cars");
     } catch (error) {
       console.error("Submission error:", error);
-      toast.error(error.message || "Failed to create car");
+      toast.error(
+        error.message || `Failed to ${carId ? "update" : "create"} car`
+      );
     } finally {
       setAddCarLoading(false);
     }
   }
-  const formImages = watch("images") || [];
 
+  const fetchCarData = async () => {
+    if (!carId) return;
+
+    try {
+      const res = await fetch(`/api/cars/${carId}`);
+      if (!res.ok) throw new Error("Failed to fetch car data");
+
+      const car = await res.json();
+      console.log(car); // Log the fetched car data
+
+      form.reset({
+        make: car.make,
+        model: car.model,
+        year: car.year?.toString(),
+        price: car.price?.toString(),
+        mileage: car.mileage?.toString(),
+        color: car.color,
+        fuelType: car.fuelType,
+        transmission: car.transmission,
+        bodyType: car.bodyType,
+        seats: car.seats?.toString() || "",
+        status: car.status,
+        description: car.description,
+        images: car.images || [],
+      });
+
+      setUploadedImages(
+        (car.images || [])?.map((img: string) => ({
+          file: null,
+          preview: img,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load car data");
+    }
+  };
+
+  useEffect(() => {
+    fetchCarData();
+  }, [carId]);
   return (
     <Card className="bg-gray-900 text-white flex flex-1">
       <CardHeader>
@@ -544,7 +592,7 @@ const Manual = ({ form }: ManualFormProps) => {
                         {formImages.map((img, index) => (
                           <div key={`ai-${index}`} className="relative">
                             <Image
-                              src={img}
+                              src={img || ""}
                               alt={`upload-${index}`}
                               width={200}
                               height={150}
@@ -565,8 +613,10 @@ const Manual = ({ form }: ManualFormProps) => {
                 {addCarLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding Car...
+                    {carId ? "Updating Car" : "Adding Car..."}
                   </>
+                ) : carId ? (
+                  "Update Car"
                 ) : (
                   "Add Car"
                 )}

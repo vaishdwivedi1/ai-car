@@ -1,4 +1,6 @@
 "use client";
+
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,15 +14,18 @@ import { Label } from "@/components/ui/label";
 import { TabsContent } from "@/components/ui/tabs";
 import { DAYS } from "@/Constants/constants";
 import { CheckCircle, Clock, Loader2 } from "lucide-react";
-import { useState } from "react";
 import { Checkbox } from "../ui/checkbox";
+import { toast } from "sonner";
+import { getDealershipInfo } from "@/app/api/settings/route";
+
 interface WorkingHour {
   isOpen: boolean;
   openTime: string;
   closeTime: string;
 }
+
 const WorkingHours = () => {
-  const [workingHours, setWorkingHours] = useState(
+  const [workingHours, setWorkingHours] = useState<WorkingHour[]>(
     DAYS.map(() => ({
       isOpen: false,
       openTime: "",
@@ -29,29 +34,75 @@ const WorkingHours = () => {
   );
 
   const [savingHours, setSavingHours] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Handle changes to working hours for each day
+  const fetchWorkingHours = async () => {
+    try {
+      const dealership = await getDealershipInfo();
+      console.log("API response:", dealership);
+
+      if (dealership?.workingHours?.length === DAYS.length) {
+        const loadedHours = DAYS.map((_, index) => {
+          const workingDay = dealership.workingHours[index];
+          return {
+            isOpen: workingDay?.isOpen ?? false,
+            openTime: workingDay?.openTime ?? "",
+            closeTime: workingDay?.closeTime ?? "",
+          };
+        });
+
+        console.log("Loaded Hours:", loadedHours);
+        setWorkingHours(loadedHours);
+      } else {
+        toast.error("Invalid working hours format from server.");
+      }
+    } catch (err) {
+      toast.error("Failed to load working hours");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Load saved hours from the database on mount
+  useEffect(() => {
+    fetchWorkingHours();
+  }, []);
+
+  // Handle input changes
   const handleWorkingHourChange = (
     index: number,
     field: keyof WorkingHour,
     value: string | boolean
   ) => {
-    setWorkingHours((prevState) => {
-      const updatedHours = [...prevState];
-
-      // Explicitly cast the value to the correct type
-      updatedHours[index][field] = value as WorkingHour[typeof field]; // Type assertion here
-
-      return updatedHours;
+    setWorkingHours((prev) => {
+      const updated = [...prev];
+      updated[index][field] = value as WorkingHour[typeof field];
+      return updated;
     });
   };
-  // Handle saving the working hours (e.g., API call)
-  const handleSaveHours = () => {
+
+  // Save working hours to the DB
+  const handleSaveHours = async () => {
     setSavingHours(true);
-    // Simulate saving logic (e.g., API call)
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workingHours }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Something went wrong");
+      }
+
+      toast.success("Working hours saved!");
+    } catch (error: any) {
+      console.error("Save failed:", error);
+      toast.error(error.message || "Failed to save working hours");
+    } finally {
       setSavingHours(false);
-    }, 2000); // Replace with real saving logic
+    }
   };
 
   return (
@@ -78,9 +129,13 @@ const WorkingHours = () => {
                   <Checkbox
                     id={`is-open-${day.value}`}
                     checked={workingHours[index]?.isOpen}
-                    onCheckedChange={(checked) => {
-                      handleWorkingHourChange(index, "isOpen", checked);
-                    }}
+                    onCheckedChange={(checked) =>
+                      handleWorkingHourChange(
+                        index,
+                        "isOpen",
+                        checked as boolean
+                      )
+                    }
                   />
                   <Label
                     htmlFor={`is-open-${day.value}`}

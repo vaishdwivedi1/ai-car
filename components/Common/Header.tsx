@@ -3,21 +3,25 @@
 import { isLoggedIn } from "@/hooks/isLoggedIn";
 import { Dialog, DialogPanel, PopoverGroup } from "@headlessui/react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
-
-const navLinks = [
-  { name: "Cars", href: "/cars" },
-  { name: "Saved Cars", href: "/saved-cars" },
-  { name: "Reservations", href: "/reservation" },
-  {
-    name: isLoggedIn() ? "Profile" : "Login",
-    href: isLoggedIn() ? "/profile" : "/login",
-  },
-];
+import { useEffect, useState } from "react";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    setIsLoggedIn(!!token);
+  }, []);
 
+  const navLinks = [
+    { name: "Cars", href: "/cars" },
+    { name: "Saved Cars", href: "/saved-cars" },
+    { name: "Reservations", href: "/reservation" },
+    {
+      name: isLoggedIn ? "Profile" : "Login",
+      href: isLoggedIn ? "/profile" : "/login",
+    },
+  ];
   return (
     <header className="bg-black shadow-md sticky w-full z-10">
       <nav

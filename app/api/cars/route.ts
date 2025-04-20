@@ -6,14 +6,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 // Function to convert File to base64
-async function fileToBase64(file) {
+async function fileToBase64(file: { arrayBuffer: () => any }) {
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   return buffer.toString("base64");
 }
 
 // Gemini AI integration for car image processing
-export async function processCarImageWithAI(file) {
+export async function processCarImageWithAI(file: never) {
   try {
     // Check if API key is available
     if (!process.env.GEMINI) {
@@ -122,30 +122,18 @@ export async function processCarImageWithAI(file) {
   }
 }
 
-export async function Delete(req: NextApiRequest, res: NextApiResponse) {
-  await dbConnect();
-  const { id } = req.query;
-
-  try {
-    if (req.method === "DELETE") {
-      await Car.findByIdAndDelete(id);
-      return res.status(200).json({ message: "Car deleted" });
-    }
-
-    return res.status(405).json({ message: "Method Not Allowed" });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to delete car" });
-  }
-}
-
-export async function Get(req: NextApiRequest, res: NextApiResponse) {
+export async function GET() {
   await dbConnect();
 
   try {
     const cars = await Car.find().sort({ createdAt: -1 });
-    return res.status(200).json(cars);
+    return NextResponse.json(cars);
   } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch cars" });
+    console.error("Error fetching cars:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch cars" },
+      { status: 500 }
+    );
   }
 }
 
@@ -177,6 +165,65 @@ export async function POST(req: Request) {
     console.error("Database error:", error);
     return NextResponse.json(
       { error: "Failed to create car", details: error?.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: Request) {
+  await dbConnect();
+
+  try {
+    const body = await req.json();
+    const { id, change, value } = body;
+    console.error("coming iubsahdbhsjabd");
+    if (!id || !change) {
+      return NextResponse.json(
+        { error: "Missing required parameters" },
+        { status: 400 }
+      );
+    }
+
+    let updateData: Record<string, any> = {};
+
+    // Toggle only "features.featured"
+    if (change === "featured") {
+      const car = await Car.findById(id);
+      if (!car) {
+        return NextResponse.json({ error: "Car not found" }, { status: 404 });
+      }
+
+      updateData["featured"] = !car.featured;
+    }
+
+    // Change status like "sold", "available"
+    else if (change === "status") {
+      const car = await Car.findById(id);
+      if (!car) {
+        return NextResponse.json({ error: "Car not found" }, { status: 404 });
+      }
+
+      updateData["status"] = value;
+    }
+
+    // Update the whole car object
+    else if (change === "carvalues") {
+      updateData = value;
+    }
+
+    const updatedCar = await Car.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+
+    if (!updatedCar) {
+      return NextResponse.json({ error: "Car not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedCar);
+  } catch (error) {
+    console.error("Error updating car:", error);
+    return NextResponse.json(
+      { error: "Failed to update car", details: error?.message },
       { status: 500 }
     );
   }
